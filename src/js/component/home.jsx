@@ -1,58 +1,107 @@
 import React, { useState, useEffect } from 'react';
-import '../../styles/index.css'; // Adjust the path as needed
+import '../../styles/index.css';
 
 const Home = () => {
-  const [task, setTask] = useState('');
-  const [tasks, setTasks] = useState([]);
+  const [todos, setTodos] = useState([]);
+  const [newTask, setNewTask] = useState('');
 
+  // Fetch tasks when the component mounts
   useEffect(() => {
-    const savedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
-    setTasks(savedTasks);
+    fetch('https://playground.4geeks.com/todo/user/lijdani')
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTodos(data);
+        } else {
+          console.error('Expected an array but got:', data);
+          setTodos([]);
+        }
+      })
+      .catch((error) => console.error('Error fetching data:', error));
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-  }, [tasks]);
+  const syncWithServer = (updatedTodos) => {
+    fetch('https://playground.4geeks.com/todo/user/lijdani', {
+      method: 'PUT',
+      body: JSON.stringify(updatedTodos),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((resp) => {
+        console.log(resp.ok); // Will be true if the response is successful
+        console.log(resp.status); // The status code = 200 or code = 400, etc.
+        console.log(resp.text()); // Will try to return the exact result as a string
+        return resp.json(); // Returns a promise that you can .then for results
+      })
+      .then((data) => {
+        console.log(data); // Logs the exact object received from the server
+        if (Array.isArray(data)) {
+          setTodos(data); // Update state with the data received from the server
+        }
+      })
+      .catch((error) => {
+        console.error('Error updating data:', error);
+      });
+  };
+
+  const addTask = () => {
+    if (newTask.trim() === '') return; // Prevent adding empty tasks
+
+    const updatedTodos = [...todos, { label: newTask, done: false }];
+
+    // Optimistically update the UI
+    setTodos(updatedTodos);
+
+    // Sync with server
+    syncWithServer(updatedTodos);
+
+    // Clear the input field
+    setNewTask('');
+  };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && task.trim()) {
-      setTasks([...tasks, task]);
-      setTask('');
+    if (e.key === 'Enter') {
+      addTask();
     }
   };
 
-  const handleDelete = (index) => {
-    const newTasks = tasks.filter((_, i) => i !== index);
-    setTasks(newTasks);
+  const removeTask = (index) => {
+    const updatedTodos = todos.filter((_, i) => i !== index);
+
+    // Update state
+    setTodos(updatedTodos);
+
+    // Sync with server
+    syncWithServer(updatedTodos);
   };
 
-  const handleChange = (e) => {
-    setTask(e.target.value);
+  const cleanAllTasks = () => {
+    // Clear the tasks on the front-end
+    setTodos([]);
+
+    // Sync with server by sending an empty array
+    syncWithServer([]);
   };
 
   return (
-    <div className="app">
-      <h1>My TODOs</h1>
+    <div>
       <input
         type="text"
-        value={task}
-        onChange={handleChange}
-        onKeyPress={handleKeyPress}
-        placeholder="Add a task and press Enter"
+        value={newTask}
+        onChange={(e) => setNewTask(e.target.value)}
+        onKeyDown={handleKeyPress} // Detect "Enter" key press
+        placeholder="Add a new task"
       />
+      <button onClick={addTask}>Add Task</button>
+      <button onClick={cleanAllTasks}>Clean All Tasks</button>
       <ul>
-        {tasks.length === 0 ? (
-          <p id="noTasksMessage">No tasks, add a task</p>
-        ) : (
-          tasks.map((task, index) => (
-            <li key={index}>
-              {task}
-              <button className="delete-button" onClick={() => handleDelete(index)}>
-                <i className="fas fa-trash-alt"></i> {/* Font Awesome trashcan icon */}
-              </button>
-            </li>
-          ))
-        )}
+        {todos.map((task, index) => (
+          <li key={index}>
+            {task.label}
+            <button onClick={() => removeTask(index)}>Delete</button>
+          </li>
+        ))}
       </ul>
     </div>
   );
